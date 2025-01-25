@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Données avec Fieldset et Legend</title>
+  <style>
+    
+    @font-face {
+      font-family: 'Ted Next';
+      src: url('https://raw.githubusercontent.com/rogersrepaccess/devis/main/fonts/TedNext-Regular.woff') format('woff');
+      font-weight: normal;
+      font-style: normal;
+    }
+    
+    body {
+      font-family: Ted Next;
+      margin: 20px;
+      width: 1800px;
+      height: 100px;
+    }
+    .container {
+      display: flex;
+      justify-content: space-around;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    fieldset {
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      width: 200px; /* Largeur uniforme pour tous les encadrés */
+      height: 100px; /* Hauteur uniforme pour tous les encadrés */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      box-sizing: border-box;
+      font-size: 24px;
+      font-weight: bold;
+    }
+    legend {
+      font-weight: normal;
+      padding: 0 5px;
+      font-size: 20px;
+      text-align: center;
+    }
+    .gauge-container {
+      position: relative;
+      width: 120px; /* Taille réduite du graphique */
+      height: 120px;
+      margin: 10px auto;
+    }
+    .gauge-container canvas {
+       max-width: 100%; /* Limiter à la largeur du conteneur */
+      max-height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    .gauge-label {
+      position: absolute;
+      width: 100%;
+      text-align: center;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 18px;
+      font-weight: bold;
+      color: #333;
+      margin-top: 15px;
+    }
+    .content {
+      text-align: center;
+    }
+  </style>
+  <!-- Inclure Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="container" id="data-container"></div>
+
+  <script>
+    // URL de l'application Web Google Apps Script
+    const jsonUrl = "https://script.google.com/macros/s/AKfycbyqxtO-0LFKlhQxKIb-M-GY-jxjD0Re8BW7T6KLASBP_ZOdlAG3PDesY0IOyqZb10Mu/exec";
+
+    // Fonction pour formater en format monétaire
+    function formatAsCurrency(value) {
+      if (!isNaN(value)) {
+        return parseFloat(value).toLocaleString('fr-CA', { style: 'currency', currency: 'CAD' });
+      }
+      return value;
+    }
+
+    // Fonction pour mettre la première lettre en majuscule
+    function capitalizeFirstLetter(value) {
+      if (typeof value === 'string' && value.length > 0) {
+        return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+      }
+      return value;
+    }
+
+    // Fonction pour créer un graphique de cadran stylé
+    function createStyledGaugeChart(context, percentage) {
+      new Chart(context, {
+        type: 'doughnut',
+        data: {
+          datasets: [{
+            data: [percentage, 1 - percentage],
+            backgroundColor: ['#4caf50', '#e0e0e0'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: false,
+          rotation: -90,
+          circumference: 180,
+          cutout: '70%',
+          plugins: {
+            tooltip: { enabled: false },
+            legend: { display: false }
+          }
+        }
+      });
+    }
+
+    async function fetchData() {
+  try {
+    const response = await fetch(jsonUrl);
+    const data = await response.json();
+
+    if (data.length > 0) {
+      // Créer les encadrés pour chaque colonne
+      const headers = Object.keys(data[0]);
+      const container = document.getElementById('data-container');
+
+      headers.forEach((header, colIndex) => {
+        const fieldset = document.createElement('fieldset');
+        const legend = document.createElement('legend');
+        legend.textContent = header;
+        fieldset.appendChild(legend);
+
+        data.forEach((row, rowIndex) => {
+          const value = row[header];
+          const div = document.createElement('div');
+          div.classList.add('content');
+
+          if (colIndex === 0) { // Première colonne : majuscule
+            div.textContent = capitalizeFirstLetter(value);
+          } else if (colIndex >= 1 && colIndex <= 5) { // Colonnes B à F : format monétaire
+            div.textContent = formatAsCurrency(value);
+          } else if (colIndex === 6) { // Colonne G : pourcentage + graphique
+            const percentage = parseFloat(value);
+            
+            // Créer un conteneur pour le graphique et le pourcentage
+            const gaugeContainer = document.createElement('div');
+            gaugeContainer.classList.add('gauge-container');
+
+            // Créer le canvas pour le graphique
+            const canvas = document.createElement('canvas');
+            canvas.id = `gauge-chart-${rowIndex}`;
+            gaugeContainer.appendChild(canvas);
+
+            // Ajouter un label pour le pourcentage
+            const label = document.createElement('div');
+            label.classList.add('gauge-label');
+            label.textContent = `${(percentage * 100).toFixed(1)} %`;
+            gaugeContainer.appendChild(label);
+
+            div.appendChild(gaugeContainer);
+
+            // Ajouter le graphique après avoir rendu la cellule
+            setTimeout(() => {
+              const context = document.getElementById(`gauge-chart-${rowIndex}`).getContext('2d');
+              createStyledGaugeChart(context, percentage);
+            }, 0);
+          } else if (colIndex === 7) { // Colonne H : nombre de jours restants
+            const daysLeft = parseInt(value, 10); // Convertir la valeur en entier
+            div.textContent = `${daysLeft} jours`;
+
+            // Appliquer un dégradé de vert à rouge
+            const red = Math.min(255, Math.max(0, Math.floor((30 - daysLeft) * 255 / 30))); // Plus proche de 30 = rouge
+            const green = Math.min(255, Math.max(0, Math.floor((daysLeft * 255) / 30))); // Plus proche de 0 = vert
+            div.style.color = `rgb(${red}, ${green}, 0)`; // Dégradé dynamique
+          } else { // Autres colonnes
+            div.textContent = value;
+          }
+
+          fieldset.appendChild(div);
+        });
+
+        container.appendChild(fieldset);
+      });
+    }
+  } catch (error) {
+    console.error("Erreur lors du chargement des données :", error);
+  }
+}
+
+
+    // Charger les données au démarrage
+    fetchData();
+  </script>
+</body>
+</html>
